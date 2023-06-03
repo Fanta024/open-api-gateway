@@ -1,0 +1,19 @@
+spring:
+  cloud:
+    gateway:
+      routes:
+        - id: test
+          uri: http://localhost:8123
+          predicates:
+            - Path=/test3/**
+          filters:
+            - StripPrefix=1
+        - id: test2
+          uri: http://localhost:8123
+          predicates:
+            - Path=/api/**
+#          filters:
+#            - StripPrefix=1
+server:
+  port: 80
+#trace: true
