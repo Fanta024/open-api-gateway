@@ -15,5 +15,5 @@ spring:
 #          filters:
 #            - StripPrefix=1
 server:
-  port: 80
+  port: 6666
 #trace: true
