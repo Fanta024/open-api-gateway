@@ -17,3 +17,11 @@ spring:
 server:
   port: 6666
 #trace: true
+dubbo:
+  application:
+    name: dubbo-spring-boot-consumer
+  registry:
+    address: nacos://localhost:8848
+  protocol:
+    name: dubbo
+    port: -1 # 由系统分配
