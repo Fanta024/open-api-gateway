@@ -1,8 +1,14 @@
 package com.fanta.fantagateway;
 
 
+import com.fanta.fantaapicommon.model.entity.InterfaceInfo;
+import com.fanta.fantaapicommon.model.entity.User;
+import com.fanta.fantaapicommon.service.InnerInterfaceInfoService;
+import com.fanta.fantaapicommon.service.InnerUserInterfaceInfoService;
+import com.fanta.fantaapicommon.service.InnerUserService;
 import com.fanta.fantaclientsdk.utils.SignUtils;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.dubbo.config.annotation.DubboReference;
 import org.reactivestreams.Publisher;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
@@ -12,6 +18,7 @@ import org.springframework.core.io.buffer.DataBufferFactory;
 import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.server.RequestPath;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.http.server.reactive.ServerHttpResponseDecorator;
@@ -29,6 +36,13 @@ import java.util.List;
 @Slf4j
 public class CustomGlobalFilter implements GlobalFilter, Ordered {
     public static final List<String> IP_WHITE_LIST = Arrays.asList("127.0.0.1", "localhost");
+    private static final String INTERFACE_HOST = "http://localhost:8123";
+    @DubboReference
+    private InnerUserService innerUserService;
+    @DubboReference
+    private InnerInterfaceInfoService interfaceInfoService;
+    @DubboReference
+    private InnerUserInterfaceInfoService innerUserInterfaceInfoService;
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
@@ -44,6 +58,8 @@ public class CustomGlobalFilter implements GlobalFilter, Ordered {
             return response.setComplete();
         }
         HttpHeaders headers = request.getHeaders();
+        String url = INTERFACE_HOST + request.getPath().value();
+        String method = request.getMethodValue();
         String accessKey = headers.getFirst("accessKey");
         String sign = headers.getFirst("sign");
         String body = headers.getFirst("body");
@@ -51,20 +67,27 @@ public class CustomGlobalFilter implements GlobalFilter, Ordered {
         String timestamp = headers.getFirst("timestamp");
         final long FIVE_TIME = 5 * 60L;
         if ((System.currentTimeMillis() / 1000) - Long.parseLong(timestamp) >= FIVE_TIME) {
-            response.setStatusCode(HttpStatus.FORBIDDEN);
-            return response.setComplete();
+            return handleNoAuth(response);
         }
 
         //判断接口是否存在
-
+        InterfaceInfo interfaceInfo = interfaceInfoService.getInterfaceInfo(url, method);
+        if (interfaceInfo == null) {
+            return handleInvokeError(response);
+        }
         //ak、sk是否合法
-        //实际情况是从数据库中查取sk
-        String serverSign = SignUtils.getSign(body, "asdqwe");
+        //从数据库中查取sk
+        User user = innerUserService.getInvokeUser(accessKey);
+        if (user == null) {
+            return handleNoAuth(response);
+        }
+        String secretKey = user.getSecretKey();
+        String serverSign = SignUtils.getSign(body, secretKey);
         if (!serverSign.equals(sign)) {
             return handleNoAuth(response);
         }
         //请求转发 调用接口请求次数+1  调用之前写过的接口    invokeCount
-        return handleResponse(exchange, chain);
+        return handleResponse(exchange, chain, interfaceInfo.getId(), interfaceInfo.getUserId());
 //        //调用成功
 //        response.setStatusCode(HttpStatus.OK);
 //        //调用失败
@@ -88,7 +111,7 @@ public class CustomGlobalFilter implements GlobalFilter, Ordered {
         return response.setComplete();
     }
 
-    public Mono<Void> handleResponse(ServerWebExchange exchange, GatewayFilterChain chain) {
+    public Mono<Void> handleResponse(ServerWebExchange exchange, GatewayFilterChain chain, long interfaceInfoId, long userId) {
         try {
             ServerHttpResponse originalResponse = exchange.getResponse();
             DataBufferFactory bufferFactory = originalResponse.bufferFactory();
@@ -105,6 +128,8 @@ public class CustomGlobalFilter implements GlobalFilter, Ordered {
                         if (body instanceof Flux) {
                             Flux<? extends DataBuffer> fluxBody = Flux.from(body);
                             return super.writeWith(fluxBody.map(dataBuffer -> {
+                                //调用成功次数+1
+                                innerUserInterfaceInfoService.invokeCount(interfaceInfoId, userId);
                                 byte[] content = new byte[dataBuffer.readableByteCount()];
                                 dataBuffer.read(content);
                                 DataBufferUtils.release(dataBuffer);//释放掉内存

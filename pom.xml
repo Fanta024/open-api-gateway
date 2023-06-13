@@ -4,7 +4,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.fanta</groupId>
     <artifactId>fanta-gateway</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>1.0.0</version>
     <name>fanta-gateway</name>
     <description>fanta-gateway</description>
     <properties>
@@ -19,6 +19,12 @@
             <groupId>com.fanta</groupId>
             <artifactId>fanta-client-sdk</artifactId>
             <version>0.0.1</version>
+        </dependency>
+        <!--        引入公共包-->
+        <dependency>
+            <groupId>com.fanta</groupId>
+            <artifactId>fanta-common</artifactId>
+            <version>1.0.0</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.cloud</groupId>
