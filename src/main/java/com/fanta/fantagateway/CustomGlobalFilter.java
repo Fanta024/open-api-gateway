@@ -127,9 +127,10 @@ public class CustomGlobalFilter implements GlobalFilter, Ordered {
                         //log.info("body instanceof Flux: {}", (body instanceof Flux));
                         if (body instanceof Flux) {
                             Flux<? extends DataBuffer> fluxBody = Flux.from(body);
-                            return super.writeWith(fluxBody.map(dataBuffer -> {
+                            return super.writeWith(fluxBody.doOnNext(dataBuffer -> {
                                 //调用成功次数+1
                                 innerUserInterfaceInfoService.invokeCount(interfaceInfoId, userId);
+                            }).map(dataBuffer -> {
                                 byte[] content = new byte[dataBuffer.readableByteCount()];
                                 dataBuffer.read(content);
                                 DataBufferUtils.release(dataBuffer);//释放掉内存
